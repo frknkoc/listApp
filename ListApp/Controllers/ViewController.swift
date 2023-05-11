@@ -1,19 +1,21 @@
 import UIKit
+import CoreData
 
 class ViewController: UIViewController {
     
     var alertController = UIAlertController()
- 
+    
     
     @IBOutlet weak var tableView : UITableView!
     
-    var data = [String]()
+    var data = [NSManagedObject]()
     
     override func viewDidLoad() {
         super.viewDidLoad()
         
         tableView.delegate = self
         tableView.dataSource = self
+        fetch()
     }
     
     @IBAction func removeButtonTapped(_ sender : UIBarButtonItem){
@@ -37,12 +39,25 @@ class ViewController: UIViewController {
                      message: "",
                      defaultButtonTitle: "Ekle",
                      cancelButtonTitle: "Vazgeç",
-        isTextfieldAvaible: true,
+                     isTextfieldAvaible: true,
                      defaultButtonHandler: { _ in
             let text = self.alertController.textFields?.first?.text
             if text != ""{
-                self.data.append((text)!)
-                self.tableView.reloadData()
+                
+                let appDelegate = UIApplication.shared.delegate as? AppDelegate
+                
+                let managedObjectContext = appDelegate?.persistentContainer.viewContext
+                
+                let entity = NSEntityDescription.entity(forEntityName: "ListItem", in: managedObjectContext!)
+                
+                let listItem = NSManagedObject(entity: entity!, insertInto: managedObjectContext)
+                
+                listItem.setValue(text, forKey: "title")
+                
+                try? managedObjectContext?.save()
+                
+                
+                self.fetch()
             } else {
                 self.presentWarningAlert()
             }
@@ -67,8 +82,8 @@ class ViewController: UIViewController {
         
         if defaultButtonTitle != "" {
             let defaultButton = UIAlertAction(title: defaultButtonTitle,
-                                                   style: .default,
-                                                   handler: defaultButtonHandler
+                                              style: .default,
+                                              handler: defaultButtonHandler
             )
             alertController.addAction(defaultButton)
         }
@@ -82,6 +97,17 @@ class ViewController: UIViewController {
         
         alertController.addAction(cancelButton)
     }
+    
+    func fetch(){
+        let appDelegate = UIApplication.shared.delegate as? AppDelegate
+        
+        let managedObjectContext = appDelegate?.persistentContainer.viewContext
+        
+        let fetchRequest = NSFetchRequest<NSManagedObject>(entityName: "ListItem")
+        
+        data = try! managedObjectContext!.fetch(fetchRequest)
+        tableView.reloadData()
+    }
 }
 
 extension ViewController: UITableViewDelegate, UITableViewDataSource {
@@ -91,14 +117,26 @@ extension ViewController: UITableViewDelegate, UITableViewDataSource {
     
     func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
         let cell = tableView.dequeueReusableCell(withIdentifier: "defaultCell", for: indexPath)
-        cell.textLabel?.text = data[indexPath.row]
+        
+        let listItem = data[indexPath.row]
+        cell.textLabel?.text = listItem.value(forKey: "title") as? String
         return cell
     }
     func tableView(_ tableView: UITableView, trailingSwipeActionsConfigurationForRowAt indexPath: IndexPath) -> UISwipeActionsConfiguration? {
         
         let deleteAction = UIContextualAction(style: .normal
                                               , title: "Sil") { _, _, _ in
-            self.data.remove(at: indexPath.row)
+            // self.data.remove(at: indexPath.row)
+            let appDelegate = UIApplication.shared.delegate as? AppDelegate
+            
+            let managedObjectContext = appDelegate?.persistentContainer.viewContext
+            
+            managedObjectContext?.delete(self.data[indexPath.row])
+            
+            try? managedObjectContext?.save()
+            
+            self.fetch()
+            
             tableView.reloadData()
         }
         
@@ -114,7 +152,17 @@ extension ViewController: UITableViewDelegate, UITableViewDataSource {
                          defaultButtonHandler: { _ in
                 let text = self.alertController.textFields?.first?.text
                 if text != ""{
-                    self.data[indexPath.row] = text!
+                    
+                    let appDelegate = UIApplication.shared.delegate as? AppDelegate
+                    
+                    let managedObjectContext = appDelegate?.persistentContainer.viewContext
+                    
+                    self.data[indexPath.row].setValue(text, forKey: "title")
+                    
+                    if managedObjectContext!.hasChanges {
+                        try? managedObjectContext?.save()
+                    }
+                    
                     self.tableView.reloadData()
                 } else {
                     self.presentWarningAlert()
